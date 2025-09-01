@@ -46,6 +46,7 @@ from scipy.sparse import coo_matrix, csc_matrix, csr_matrix, lil_matrix
 from scipy.stats import unitary_group
 
 import pennylane as qml
+from pennylane.ops.functions.assert_valid import _test_decomposition_rule
 from pennylane.wires import Wires
 
 # Non-parametrized operations and their matrix representation
@@ -820,6 +821,13 @@ class TestMultiControlledX:
         op_repr = qml.MultiControlledX(wires=wires, control_values=control_values).__repr__()
         assert op_repr == f"MultiControlledX(wires={wires}, control_values={control_values})"
 
+    @pytest.mark.parametrize("num_work_wires", [0, 1, 2, 3])
+    def test_decomposition_rules_with_work_wires(self, num_work_wires):
+        """Tests the decomposition rules of MCX when work wires are specified."""
+        op = qml.MultiControlledX([0, 1, 2, 3, 4, 5], work_wires=range(6, num_work_wires + 6))
+        for rule in qml.list_decomps(qml.MultiControlledX):
+            _test_decomposition_rule(op, rule)
+
 
 period_two_ops = (
     qml.PauliX(0),
@@ -841,6 +849,7 @@ period_two_ops = (
 
 
 class TestPowMethod:
+
     @pytest.mark.parametrize("op", period_two_ops)
     @pytest.mark.parametrize("n", (1, 5, -1, -5))
     def test_period_two_pow_odd(self, op, n):
@@ -1068,6 +1077,60 @@ class TestControlledMethod:
         """Test the PauliZ _controlled method."""
         out = qml.CZ(wires=[0, 1])._controlled("a")
         qml.assert_equal(out, qml.CCZ(("a", 0, 1)))
+
+
+class TestSpecialPowDecomps:  # pylint: disable=too-few-public-methods
+    """Tests special decomposition rules for Pow of operators."""
+
+    @pytest.mark.parametrize("op", [qml.X(0), qml.Y(0), qml.Z(0), qml.S(0)])
+    def test_op_fractional_power(self, op):
+        """Test that fractional powers of operators are decomposed correctly."""
+
+        half_op = qml.pow(op, 0.5)
+        quart_op = qml.pow(op, 0.25)
+
+        decomps = qml.list_decomps(f"Pow({op.name})")
+        for rule in decomps:
+
+            if rule.is_applicable(**half_op.resource_params):
+
+                with qml.queuing.AnnotatedQueue() as q:
+                    rule(*half_op.parameters, wires=half_op.wires, **half_op.hyperparameters)
+                    rule(*half_op.parameters, wires=half_op.wires, **half_op.hyperparameters)
+
+                tape = qml.tape.QuantumScript.from_queue(q)
+                assert qml.math.allclose(qml.matrix(tape), qml.matrix(op))
+
+            if rule.is_applicable(**quart_op.resource_params):
+
+                with qml.queuing.AnnotatedQueue() as q:
+                    rule(*quart_op.parameters, wires=quart_op.wires, **quart_op.hyperparameters)
+                    rule(*quart_op.parameters, wires=quart_op.wires, **quart_op.hyperparameters)
+                    rule(*quart_op.parameters, wires=quart_op.wires, **quart_op.hyperparameters)
+                    rule(*quart_op.parameters, wires=quart_op.wires, **quart_op.hyperparameters)
+
+                tape = qml.tape.QuantumScript.from_queue(q)
+                assert qml.math.allclose(qml.matrix(tape), qml.matrix(op))
+
+    @pytest.mark.parametrize("z", [0.25, 0.5, 2, 4, 8, 9])
+    @pytest.mark.parametrize("op", [qml.ISWAP(wires=[0, 1]), qml.SISWAP(wires=[0, 1])])
+    def test_ISWAP_and_SISWAP_powers(self, op, z):
+        """Tests the power decomposition of ISWAP and SISWAP gates."""
+
+        pow_op = qml.pow(op, z)
+
+        decomps = qml.list_decomps(f"Pow({op.name})")
+        for rule in decomps:
+
+            if rule.is_applicable(**pow_op.resource_params):
+
+                with qml.queuing.AnnotatedQueue() as q:
+                    rule(*pow_op.parameters, wires=pow_op.wires, **pow_op.hyperparameters)
+
+                # It's fine to test matrix equivalence here because ISWAP and SISWAP
+                # have very specific power decompositions.
+                tape = qml.tape.QuantumScript.from_queue(q)
+                assert qml.math.allclose(qml.matrix(tape, wire_order=[0, 1]), qml.matrix(pow_op))
 
 
 SPARSE_MATRIX_SUPPORTED_OPERATIONS = (

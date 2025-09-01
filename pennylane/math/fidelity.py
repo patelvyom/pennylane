@@ -178,7 +178,9 @@ def _register_vjp(state0, state1):
         _register_jax_vjp()
     elif interface == "torch":
         _register_torch_vjp()
-    elif interface == "tensorflow":
+    elif (
+        interface == "tensorflow"
+    ):  # pragma: no cover (TensorFlow tests were disabled during deprecation)
         _register_tf_vjp()
 
 
@@ -325,9 +327,11 @@ def _register_torch_vjp():
     """
     Register the custom VJP for torch
     """
-    # pylint: disable=import-outside-toplevel,abstract-method,arguments-differ
+    # pylint: disable=import-outside-toplevel
     import torch
 
+    # TODO: Remove when PL supports pylint==3.3.6 (it is considered a useless-suppression) [sc-91362]
+    # pylint: disable=abstract-method, arguments-differ
     class _TorchFidelity(torch.autograd.Function):
         @staticmethod
         def forward(ctx, dm0, dm1):
@@ -349,7 +353,7 @@ def _register_torch_vjp():
 
 
 @lru_cache(maxsize=None)
-def _register_tf_vjp():
+def _register_tf_vjp():  # pragma: no cover (TensorFlow tests were disabled during deprecation)
     """
     Register the custom VJP for tensorflow
     """

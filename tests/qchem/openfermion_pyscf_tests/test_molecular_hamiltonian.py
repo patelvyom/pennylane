@@ -16,7 +16,6 @@ Unit tests for molecular Hamiltonians.
 """
 # pylint: disable=too-many-arguments, protected-access
 import pytest
-from conftest import xfail_on_numpy2  # pylint: disable=no-name-in-module
 
 import pennylane as qml
 from pennylane import I, X, Y, Z
@@ -65,8 +64,8 @@ test_coordinates = np.array(
     ),
     [
         (0, 1, "pyscf", 2, 2, "jordan_WIGNER"),
-        pytest.param(1, 2, "openfermion", 3, 4, "BRAVYI_kitaev", marks=xfail_on_numpy2),
-        pytest.param(-1, 2, "openfermion", 1, 2, "jordan_WIGNER", marks=xfail_on_numpy2),
+        (1, 2, "openfermion", 3, 4, "BRAVYI_kitaev"),
+        (-1, 2, "openfermion", 1, 2, "jordan_WIGNER"),
         (2, 1, "pyscf", 2, 2, "BRAVYI_kitaev"),
     ],
 )
@@ -113,8 +112,8 @@ def test_building_hamiltonian(
     ),
     [
         (0, 1, "pyscf", 2, 2, "jordan_WIGNER"),
-        pytest.param(1, 2, "openfermion", 3, 4, "BRAVYI_kitaev", marks=xfail_on_numpy2),
-        pytest.param(-1, 2, "openfermion", 1, 2, "jordan_WIGNER", marks=xfail_on_numpy2),
+        (1, 2, "openfermion", 3, 4, "BRAVYI_kitaev"),
+        (-1, 2, "openfermion", 1, 2, "jordan_WIGNER"),
         (2, 1, "pyscf", 2, 2, "BRAVYI_kitaev"),
     ],
 )
@@ -608,7 +607,7 @@ def test_differentiable_hamiltonian_molecule_class(symbols, geometry, mapping, h
     ("wiremap"),
     [
         ["a", "b", "c", "d"],
-        [0, "z", 3, "ancilla"],
+        [0, "z", 3, "auxiliary"],
     ],
 )
 @pytest.mark.usefixtures("skip_if_no_openfermion_support")
@@ -634,7 +633,7 @@ def test_custom_wiremap_hamiltonian_pyscf(wiremap, tmpdir):
     ("wiremap"),
     [
         ["a", "b", "c", "d"],
-        [0, "z", 3, "ancilla"],
+        [0, "z", 3, "auxiliary"],
     ],
 )
 @pytest.mark.usefixtures("skip_if_no_openfermion_support")
@@ -659,11 +658,11 @@ def test_custom_wiremap_hamiltonian_pyscf_molecule_class(wiremap, tmpdir):
     ("wiremap", "args"),
     [
         (
-            [0, "z", 3, "ancilla"],
+            [0, "z", 3, "auxiliary"],
             None,
         ),
         (
-            [0, "z", 3, "ancilla"],
+            [0, "z", 3, "auxiliary"],
             [np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 2.0]])],
         ),
     ],
@@ -699,11 +698,11 @@ def test_custom_wiremap_hamiltonian_dhf(wiremap, args, tmpdir):
     ("wiremap", "args"),
     [
         (
-            [0, "z", 3, "ancilla"],
+            [0, "z", 3, "auxiliary"],
             None,
         ),
         (
-            [0, "z", 3, "ancilla"],
+            [0, "z", 3, "auxiliary"],
             [np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 2.0]])],
         ),
     ],
@@ -969,7 +968,6 @@ def test_error_raised_for_missing_molecule_information():
         qchem.molecular_hamiltonian(charge=0, mult=1, method="dhf")
 
 
-@xfail_on_numpy2
 @pytest.mark.parametrize(
     ("symbols", "geometry", "charge", "mapping", "h_ref_data"),
     [
@@ -1115,7 +1113,7 @@ def test_error_raised_for_missing_molecule_information():
                 ],
             ),
         ),
-        (
+        pytest.param(
             ["H", "H"],
             np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 2.0]]),
             0,
@@ -1162,6 +1160,10 @@ def test_error_raised_for_missing_molecule_information():
                     Z(1) @ Z(3),
                     Z(2) @ Z(3),
                 ],
+            ),
+            marks=pytest.mark.xfail(
+                reason="OpenFermion backend is not yet compatible with numpy==2.3.1. See issue https://github.com/quantumlib/OpenFermion/issues/1097 for more details.",
+                strict=True,
             ),
         ),
         (
@@ -1244,7 +1246,7 @@ def test_mapped_hamiltonian_pyscf_openfermion(
     [
         "pyscf",
         "dhf",
-        pytest.param("openfermion", marks=xfail_on_numpy2),
+        "openfermion",
     ],
 )
 def test_coordinate_units_for_molecular_hamiltonian(method, tmpdir):
@@ -1277,7 +1279,7 @@ def test_coordinate_units_for_molecular_hamiltonian(method, tmpdir):
     [
         "pyscf",
         "dhf",
-        pytest.param("openfermion", marks=xfail_on_numpy2),
+        "openfermion",
     ],
 )
 def test_coordinate_units_for_molecular_hamiltonian_molecule_class(method, tmpdir):

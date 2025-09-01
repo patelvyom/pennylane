@@ -64,7 +64,9 @@ class ClassicalShadow:
 
     .. code-block:: python3
 
-        dev = qml.device("default.qubit", wires=range(2), shots=1000)
+        from functools import partial
+        dev = qml.device("default.qubit", wires=range(2))
+        @partial(qml.set_shots, shots=1000)
         @qml.qnode(dev)
         def qnode(x):
             qml.Hadamard(0)
@@ -193,7 +195,9 @@ class ClassicalShadow:
 
         .. code-block:: python3
 
-            dev = qml.device("default.qubit", wires=range(2), shots=1000)
+            from functools import partial
+            dev = qml.device("default.qubit", wires=range(2))
+            @partial(qml.set_shots, shots=1000)
             @qml.qnode(dev)
             def qnode():
                 qml.Hadamard(0)
@@ -296,7 +300,9 @@ class ClassicalShadow:
 
         .. code-block:: python3
 
-            dev = qml.device("default.qubit", wires=range(2), shots=1000)
+            from functools import partial
+            dev = qml.device("default.qubit", wires=range(2))
+            @partial(qml.set_shots, shots=1000)
             @qml.qnode(dev)
             def qnode(x):
                 qml.Hadamard(0)
@@ -366,8 +372,7 @@ class ClassicalShadow:
                 number of wires for the reduced state.
             snapshots (Iterable[int] or int): Only compute a subset of local snapshots. For ``snapshots=None`` (default), all local snapshots are taken.
                 In case of an integer, a random subset of that size is taken. The subset can also be explicitly fixed by passing an Iterable with the corresponding indices.
-            alpha (float): order of the Renyi-entropy. Defaults to ``alpha=2``, which corresponds to the purity of the reduced state. This case is straight forward to compute.
-                All other cases ``alpha!=2`` necessitate computing the eigenvalues of the reduced state and thus may lead to longer computations times.
+            alpha (float): order of the Renyi-entropy. Defaults to ``alpha=2``, which corresponds to the purity of the reduced state.
                 Another special case is ``alpha=1``, which corresponds to the von Neumann entropy.
             k (int): Allow to split the snapshots into ``k`` equal parts and estimate the snapshots in a median of means fashion. There is no known advantage to do this for entropies.
                 Thus, ``k=1`` is default and advised.
@@ -383,9 +388,11 @@ class ClassicalShadow:
 
         .. code-block:: python3
 
+            from functools import partial
             wires = 4
-            dev = qml.device("default.qubit", wires=range(wires), shots=1000)
+            dev = qml.device("default.qubit", wires=range(wires))
 
+            @partial(qml.set_shots, shots=1000)
             @qml.qnode(dev)
             def max_entangled_circuit():
                 qml.Hadamard(wires=0)

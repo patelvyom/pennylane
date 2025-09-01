@@ -24,6 +24,7 @@ from default_qubit_legacy import DefaultQubitLegacy
 import pennylane as qml
 from pennylane import numpy as pnp
 from pennylane.devices import QubitDevice
+from pennylane.exceptions import DeviceError, QuantumFunctionError
 from pennylane.measurements import (
     ExpectationMP,
     MeasurementProcess,
@@ -234,7 +235,7 @@ class TestOperations:
             qml.var(qml.PauliZ(1))
 
         tape = QuantumScript.from_queue(q)
-        with pytest.raises(qml.DeviceError, match="Gate Hadamard not supported on device"):
+        with pytest.raises(DeviceError, match="Gate Hadamard not supported on device"):
             dev = mock_qubit_device_with_paulis_and_methods()
             dev.execute(tape)
 
@@ -296,7 +297,7 @@ class TestObservables:
             qml.sample(qml.PauliZ(2))
 
         tape = QuantumScript.from_queue(q)
-        with pytest.raises(qml.DeviceError, match="Observable Hadamard not supported on device"):
+        with pytest.raises(DeviceError, match="Observable Hadamard not supported on device"):
             dev = mock_qubit_device_with_paulis_and_methods()
             dev.execute(tape)
 
@@ -317,7 +318,7 @@ class TestObservables:
         with monkeypatch.context() as m:
             m.setattr(QubitDevice, "apply", lambda self, x, **kwargs: None)
             with pytest.raises(
-                qml.QuantumFunctionError,
+                QuantumFunctionError,
                 match="Unsupported return type specified for observable",
             ):
                 dev = mock_qubit_device_with_paulis_and_methods()
@@ -369,7 +370,7 @@ class TestExtractStatistics:
         dev = mock_qubit_device_extract_stats()
         delattr(dev.__class__, "state")
         _match = "The state is not available in the current"
-        with pytest.raises(qml.QuantumFunctionError, match=_match):
+        with pytest.raises(QuantumFunctionError, match=_match):
             dev.statistics(qscript)
 
     @pytest.mark.parametrize("returntype", [None])
@@ -381,7 +382,7 @@ class TestExtractStatistics:
 
         qscript = QuantumScript(measurements=[UnsupportedMeasurement()])
         dev = mock_qubit_device_extract_stats()
-        with pytest.raises(qml.QuantumFunctionError, match="Unsupported return type"):
+        with pytest.raises(QuantumFunctionError, match="Unsupported return type"):
             dev.statistics(qscript)
 
     @pytest.mark.parametrize("returntype", ["not None"])
@@ -395,7 +396,7 @@ class TestExtractStatistics:
 
         qscript = QuantumScript(measurements=[UnsupportedMeasurement()])
 
-        with pytest.raises(qml.QuantumFunctionError, match="Unsupported return type"):
+        with pytest.raises(QuantumFunctionError, match="Unsupported return type"):
             dev = mock_qubit_device_extract_stats()
             dev.statistics(qscript)
 
@@ -424,7 +425,7 @@ class TestExtractStatistics:
 
         tape = qml.tape.QuantumScript([], [qml.classical_shadow(wires=0), qml.state()])
 
-        with pytest.raises(qml.QuantumFunctionError, match="Classical shadows cannot be returned"):
+        with pytest.raises(QuantumFunctionError, match="Classical shadows cannot be returned"):
             dev.statistics(tape)
 
     def test_no_shadow_expval_with_other_meas(self, mock_qubit_device_extract_stats):
@@ -434,7 +435,7 @@ class TestExtractStatistics:
 
         tape = qml.tape.QuantumScript([], [qml.shadow_expval(qml.X(0)), qml.state()])
 
-        with pytest.raises(qml.QuantumFunctionError, match="Classical shadows cannot be"):
+        with pytest.raises(QuantumFunctionError, match="Classical shadows cannot be"):
             dev.statistics(tape)
 
 
@@ -489,7 +490,7 @@ class TestSampleBasisStates:
         state_probs = [0.1, 0.2, 0.3, 0.4]
 
         with pytest.raises(
-            qml.QuantumFunctionError,
+            QuantumFunctionError,
             match="The number of shots has to be explicitly set on the device",
         ):
             dev.sample_basis_states(number_of_states, state_probs)
@@ -1210,11 +1211,11 @@ class TestNativeMidCircuitMeasurements:
     def test_qnode_native_mcm(self, mocker):
         """Tests that the legacy devices may support native MCM execution via the dynamic_one_shot transform."""
 
-        dev = self.MCMDevice(wires=1, shots=100)
+        dev = self.MCMDevice(wires=1)
         dev.operations.add("MidMeasureMP")
         spy = mocker.spy(qml.dynamic_one_shot, "_transform")
 
-        @qml.qnode(dev, interface=None, diff_method=None)
+        @qml.qnode(dev, interface=None, diff_method=None, shots=100)
         def func():
             _ = qml.measure(0)
             return qml.expval(op=qml.PauliZ(0))
@@ -1226,7 +1227,7 @@ class TestNativeMidCircuitMeasurements:
     @pytest.mark.parametrize("postselect_mode", ["hw-like", "fill-shots"])
     def test_postselect_mode_propagates_to_execute(self, monkeypatch, postselect_mode):
         """Test that the specified postselect mode propagates to execution as expected."""
-        dev = self.MCMDevice(wires=1, shots=100)
+        dev = self.MCMDevice(wires=1)
         dev.operations.add("MidMeasureMP")
         pm_propagated = False
 
@@ -1234,7 +1235,7 @@ class TestNativeMidCircuitMeasurements:
             nonlocal pm_propagated
             pm_propagated = kwargs.get("postselect_mode", -1) == postselect_mode
 
-        @qml.qnode(dev, postselect_mode=postselect_mode)
+        @qml.qnode(dev, postselect_mode=postselect_mode, shots=100)
         def func():
             _ = qml.measure(0, postselect=1)
             return qml.expval(op=qml.PauliZ(0))
@@ -1541,9 +1542,9 @@ class TestResourcesTracker:
     @pytest.mark.autograd
     def test_tracker_grad(self):
         """Test that the tracker can track resources through a gradient computation"""
-        dev = DefaultQubitLegacy(wires=1, shots=100)
+        dev = DefaultQubitLegacy(wires=1)
 
-        @qml.qnode(dev, diff_method="parameter-shift")
+        @qml.qnode(dev, diff_method="parameter-shift", shots=100)
         def circuit(x):
             qml.RX(x, wires=0)  # 2 term parameter shift
             return qml.expval(qml.PauliZ(0))
@@ -1678,11 +1679,11 @@ def test_no_adjoint_jacobian_errors():
 
     dev = DummyQubitDevice(wires=0)
 
-    with pytest.raises(qml.QuantumFunctionError, match="Parameter broadcasting is not supported"):
+    with pytest.raises(QuantumFunctionError, match="Parameter broadcasting is not supported"):
         dev.adjoint_jacobian(tape)
 
     dev.shots = (10, 10)  # pylint: disable=attribute-defined-outside-init
 
     tape2 = qml.tape.QuantumScript([qml.RX(0.1, 0)], [qml.expval(qml.Z(0))])
-    with pytest.raises(qml.QuantumFunctionError, match="Adjoint does not support shot vector"):
+    with pytest.raises(QuantumFunctionError, match="Adjoint does not support shot vector"):
         dev.adjoint_jacobian(tape2)

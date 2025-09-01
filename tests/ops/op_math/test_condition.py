@@ -28,8 +28,9 @@ import numpy as np
 import pytest
 
 import pennylane as qml
+from pennylane.exceptions import ConditionalTransformError
 from pennylane.operation import Operator
-from pennylane.ops.op_math.condition import Conditional, ConditionalTransformError
+from pennylane.ops.op_math.condition import Conditional
 
 terminal_meas = [
     qml.probs(wires=[1, 0]),
@@ -249,6 +250,25 @@ class TestAdditionalCond:
         assert cond_op.batch_size == op.batch_size
         assert cond_op.num_params == op.num_params
         assert cond_op.ndim_params == op.ndim_params
+
+    def test_qfunc_arg_dequeued(self):
+        """Tests that the operators in the quantum function arguments are dequeued."""
+
+        def true_fn(op):
+            qml.apply(op)
+
+        def false_fn(op):
+            qml.apply(op)
+
+        def circuit(x):
+            qml.cond(x > 0, true_fn, false_fn)(qml.X(0))
+
+        with qml.queuing.AnnotatedQueue() as q:
+            circuit(1)
+            circuit(-1)
+
+        assert len(q.queue) == 2
+        assert q.queue == [qml.X(0), qml.X(0)]
 
 
 @pytest.mark.parametrize("op_class", [qml.PauliY, qml.Toffoli, qml.Hadamard, qml.CZ])

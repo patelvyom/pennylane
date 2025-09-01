@@ -12,7 +12,7 @@
 """
 Contains the sign (and xi) decomposition tape transform, implementation of ideas from arXiv:2207.09479
 """
-# pylint: disable=protected-access
+
 import json
 from os import path
 
@@ -172,7 +172,7 @@ def construct_sgn_circuit(  # pylint: disable=too-many-arguments
     tapes = []
     for mu, time in zip(mus, times):
         added_operations = []
-        # Put QSP and Hadamard test on the two ancillas Target and Control
+        # Put QSP and Hadamard test on the two auxiliarys Target and Control
         added_operations.append(qml.Hadamard(controls[0]))
         for i, phi in enumerate(phis):
             added_operations.append(qml.CRX(phi, wires=controls))
@@ -198,7 +198,7 @@ def construct_sgn_circuit(  # pylint: disable=too-many-arguments
 
 
 @transform
-def sign_expand(  # pylint: disable=too-many-arguments
+def sign_expand(
     tape: QuantumScript, circuit=False, J=10, delta=0.0, controls=("Hadamard", "Target")
 ) -> tuple[QuantumScriptBatch, PostprocessingFn]:
     r"""
@@ -265,7 +265,7 @@ def sign_expand(  # pylint: disable=too-many-arguments
 
     >>> tapes, fn = qml.transforms.sign_expand(tape)
 
-    We can evaluate these tapes on a device, it needs two additional ancilla gates labeled 'Hadamard' and 'Target' if
+    We can evaluate these tapes on a device, it needs two additional auxiliary gates labeled 'Hadamard' and 'Target' if
     one wants to make the circuit approximation of the decomposition:
 
     >>> dev = qml.device("default.qubit", wires=[0,1,2,'Hadamard','Target'])
@@ -301,7 +301,7 @@ def sign_expand(  # pylint: disable=too-many-arguments
 
     """
     path_str = path.dirname(__file__)
-    with open(path_str + "/sign_expand_data.json", "r", encoding="utf-8") as f:
+    with open(path_str + "/sign_expand_data.json", encoding="utf-8") as f:
         data = json.load(f)
     phis = list(filter(lambda data: data["delta"] == delta and data["order"] == J, data))[0][
         "opt_params"
@@ -330,13 +330,13 @@ def sign_expand(  # pylint: disable=too-many-arguments
     if circuit:
         tapes = construct_sgn_circuit(hamiltonian, tape, mus, times, phis, controls)
         if isinstance(tape.measurements[0], qml.measurements.ExpectationMP):
-            # pylint: disable=function-redefined
+
             def processing_fn(res):
                 products = [a * b for a, b in zip(res, dEs)]
                 return qml.math.sum(products)
 
         else:
-            # pylint: disable=function-redefined
+
             def processing_fn(res):
                 products = [a * b for a, b in zip(res, dEs)]
                 return qml.math.sum(products) * len(products)
