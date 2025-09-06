@@ -41,7 +41,7 @@ on:
         description: The version of Python to use in order to run unit tests
         required: false
         type: string
-        default: '3.10'
+        default: '3.11'
       pytest_test_directory:
         description: The directory where the PennyLane tests are that should be run by PyTest
         required: false
@@ -202,7 +202,7 @@ jobs:
           COV_CORE_DATAFILE: .coverage.eager
           TF_USE_LEGACY_KERAS: "1"  # sets to use tf-keras (Keras2) instead of keras (Keras3) when running TF tests
         # Calling PyTest by invoking Python first as that adds the current directory to sys.path
-        run: python -m pytest ${{ inputs.pytest_test_directory }} ${{ steps.pytest_args.outputs.args }} ${{ env.PYTEST_MARKER }} --timeout=500
+        run: python -m pytest ${{ inputs.pytest_test_directory }} ${{ steps.pytest_args.outputs.args }} ${{ env.PYTEST_MARKER }}
 
       - name: Freeze dependencies
         shell: bash

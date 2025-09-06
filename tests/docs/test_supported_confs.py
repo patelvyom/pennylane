@@ -28,17 +28,17 @@ import pytest
 
 import pennylane as qml
 from pennylane import numpy as np
+from pennylane.exceptions import DeviceError, QuantumFunctionError
 
 pytestmark = pytest.mark.all_interfaces
 
-tf = pytest.importorskip("tensorflow")
 torch = pytest.importorskip("torch")
 F = pytest.importorskip("torch.autograd.functional")
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-interfaces = [None, "autograd", "jax", "tf", "torch"]
-diff_interfaces = ["autograd", "jax", "tf", "torch"]
+interfaces = [None, "autograd", "jax", "torch"]
+diff_interfaces = ["autograd", "jax", "torch"]
 shots_list = [None, 100]
 
 # Each of these tuples contain:
@@ -102,9 +102,10 @@ def get_qnode(interface, diff_method, return_type, shots, wire_specs):
     """
     device_wires, wire_labels, single_meas_wire, multi_meas_wire = wire_specs
 
-    dev = qml.device("default.qubit", wires=device_wires, shots=shots)
+    dev = qml.device("default.qubit", wires=device_wires)
 
     # pylint: disable=too-many-return-statements
+    @qml.set_shots(shots)
     @qml.qnode(dev, interface=interface, diff_method=diff_method)
     def circuit(x):
         for i, wire_label in enumerate(wire_labels):
@@ -154,12 +155,6 @@ def get_variable(interface, wire_specs, complex=False):
     if interface == "jax":
         # complex dtype is required for JAX when holomorphic gradient is used
         return jnp.array([0.1] * num_wires, dtype=np.complex128 if complex else None)
-    if interface == "tf":
-        # complex dtype is required for TF when the gradients have non-zero
-        # imaginary parts, otherwise they will be ignored
-        return tf.Variable(
-            [0.1] * num_wires, trainable=True, dtype=tf.complex128 if complex else tf.float64
-        )
     if interface == "torch":
         # complex dtype is required for torch when the gradients have non-zero
         # imaginary parts, otherwise they will be ignored
@@ -222,13 +217,6 @@ def compute_gradient(x, interface, circuit, return_type, complex=False):
         if return_type in grad_return_cases:
             return jax.grad(cost_fn)(x)
         return jax.jacrev(cost_fn, holomorphic=complex)(x)
-    if interface == "tf":
-        with tf.GradientTape(persistent=True) as tape:
-            out = cost_fn(x)
-
-        if return_type in grad_return_cases:
-            return tape.gradient(out, [x])
-        return tape.jacobian(out, [x], experimental_use_pfor=False)
     if interface == "torch":
         if return_type in grad_return_cases:
             res = cost_fn(x)
@@ -256,7 +244,7 @@ class TestSupportedConfs:
         """Test diff_method=device raises an error for all interfaces for default.qubit"""
         msg = "does not support device with requested circuit"
 
-        with pytest.raises(qml.QuantumFunctionError, match=msg):
+        with pytest.raises(QuantumFunctionError, match=msg):
             get_qnode(interface, "device", return_type, shots, wire_specs)
 
     @pytest.mark.parametrize(
@@ -272,12 +260,12 @@ class TestSupportedConfs:
         x = get_variable(None, wire_specs)
 
         msg = None
-        error_type = qml.DeviceError
+        error_type = DeviceError
         if diff_method == "adjoint" and (shots is not None or return_type == "Sample"):
-            error_type = qml.QuantumFunctionError
+            error_type = QuantumFunctionError
             msg = f"does not support {diff_method} with requested circuit"
         elif diff_method == "backprop" and shots:
-            error_type = qml.QuantumFunctionError
+            error_type = QuantumFunctionError
             msg = f"does not support {diff_method} with requested circuit"
         elif not shots and return_type == "Sample":
             msg = "not accepted for analytic simulation"
@@ -327,7 +315,7 @@ class TestSupportedConfs:
 
         x = get_variable(None, wire_specs)
         qn = get_qnode(interface, "backprop", return_type, 100, wire_specs)
-        with pytest.raises(qml.QuantumFunctionError, match=msg):
+        with pytest.raises(QuantumFunctionError, match=msg):
             qn(x)
 
     @pytest.mark.parametrize("interface", diff_interfaces)
@@ -345,12 +333,7 @@ class TestSupportedConfs:
         x = get_variable(interface, wire_specs, complex=True)
 
         if shots is not None:
-            with pytest.raises(qml.QuantumFunctionError):
-                compute_gradient(x, interface, circuit, return_type)
-        elif return_type == "Probability" and interface == "tf":
-            with pytest.raises(Exception):
-                # tensorflow.python.framework.errors_impl.InvalidArgumentError
-                # TODO: figure out why [sc-52490]
+            with pytest.raises(QuantumFunctionError):
                 compute_gradient(x, interface, circuit, return_type)
         else:
             compute_gradient(x, interface, circuit, return_type)
@@ -371,7 +354,7 @@ class TestSupportedConfs:
             circuit = get_qnode(interface, "adjoint", return_type, shots, wire_specs)
             x = get_variable(interface, wire_specs)
             with pytest.raises(
-                qml.QuantumFunctionError,
+                QuantumFunctionError,
                 match="does not support adjoint with requested circuit",
             ):
                 compute_gradient(x, interface, circuit, return_type)
@@ -411,7 +394,7 @@ class TestSupportedConfs:
         circuit = get_qnode(interface, "parameter-shift", return_type, shots, wire_specs)
         x = get_variable(interface, wire_specs, complex=complex)
         if shots is not None and interface != "jax":
-            with pytest.raises(qml.DeviceError, match="not accepted with finite shots"):
+            with pytest.raises(DeviceError, match="not accepted with finite shots"):
                 compute_gradient(x, interface, circuit, return_type, complex=complex)
         else:
             if interface == "torch" and return_type == "StateVector":
@@ -443,7 +426,7 @@ class TestSupportedConfs:
         circuit = get_qnode(interface, diff_method, return_type, shots, wire_specs)
         x = get_variable(interface, wire_specs)
         if shots is not None and return_type in ("VnEntropy", "MutualInfo"):
-            with pytest.raises(qml.DeviceError, match="not accepted with finite shots"):
+            with pytest.raises(DeviceError, match="not accepted with finite shots"):
                 compute_gradient(x, interface, circuit, return_type)
         else:
             compute_gradient(x, interface, circuit, return_type)
@@ -483,10 +466,10 @@ class TestSupportedConfs:
         """Test "Sample" measurement fails for all interfaces and diff_methods
         when shots=None"""
         if diff_method in {"adjoint"}:
-            error_type = qml.QuantumFunctionError
+            error_type = QuantumFunctionError
             msg = "does not support adjoint with requested circuit"
         else:
-            error_type = qml.DeviceError
+            error_type = DeviceError
             msg = "not accepted for analytic simulation"
 
         with pytest.raises(error_type, match=msg):
@@ -514,7 +497,7 @@ class TestSupportedConfs:
             x = get_variable("autograd", wire_specs)
             compute_gradient(x, "autograd", circuit, "StateVector")
 
-    @pytest.mark.parametrize("interface", ["jax", "tf", "torch"])
+    @pytest.mark.parametrize("interface", ["jax", "torch"])
     @pytest.mark.parametrize("wire_specs", wire_specs_list)
     def test_all_state_backprop(self, interface, wire_specs):
         """Test gradient of state directly succeeds for non-autograd interfaces"""
@@ -555,7 +538,7 @@ class TestSupportedConfs:
         x = get_variable(interface, wire_specs)
         if return_type in ("VnEntropy", "MutualInfo"):
             if shots and interface != "jax":
-                err_cls = qml.DeviceError
+                err_cls = DeviceError
                 msg = "not accepted with finite shots"
             else:
                 err_cls = ValueError
